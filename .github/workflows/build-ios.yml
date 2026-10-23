@@ -1,48 +1,51 @@
-name: Build Switch Recomp for iOS
+name: Build SwitchRecomp iOS
 
 on:
-  workflow_dispatch: # 允许在网页端一键手动点击触发编译
+  workflow_dispatch:
 
 jobs:
-  build-ios-ipa:
-    runs-on: macos-14 # 使用 GitHub 提供的云端 macOS 虚拟机环境
-    
+  build-ios:
+    runs-on: macos-14
+
     steps:
-      - name: Checkout Source Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Setup Build Dependencies
+      - name: Set up Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - name: Install Build Dependencies
         run: |
-          brew install cmake ninja sdl3 vulkan-headers molten-vk spirv-tools
+          brew install cmake ninja sdl3
 
       - name: Inject System Keys
         env:
           PROD_KEYS: ${{ secrets.PROD_KEYS }}
         run: |
-          mkdir -p ~/.config/switch/
-          echo "$PROD_KEYS" > ~/.config/switch/prod.keys
+          if [ -n "$PROD_KEYS" ]; then
+            mkdir -p ~/.config/switch/
+            echo "$PROD_KEYS" > ~/.config/switch/prod.keys
+          fi
 
-      - name: Cross-Compile Native Binary (ARM64 iOS)
+      - name: Build Rust Workspace for iOS
         run: |
-          mkdir build && cd build
-          cmake .. \
-            -G Ninja \
-            -DCMAKE_SYSTEM_NAME=iOS \
-            -DCMAKE_OSX_SYSROOT=iphoneos \
-            -DCMAKE_OSX_ARCHITECTURES=arm64 \
-            -DENABLE_METAL=ON
-          ninja
+          cargo build --release --target aarch64-apple-ios
 
-      - name: Package Unsigned IPA
+      - name: Package Unsigned IPA Artifact
         run: |
           mkdir -p Payload
-          cp -r build/Release-iphoneos/*.app Payload/ 2>/dev/null || cp -r build/*.app Payload/
-          zip -r SwitchRecomp_iOS.ipa Payload
+          # 自动收集编译出的二进制文件并打包
+          find target/aarch64-apple-ios/release -maxdepth 1 -type f -executable -exec cp {} Payload/ \;
+          
+          # 封装为 IPA 格式
+          zip -r SwitchRecomp-iOS.ipa Payload
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: SwitchRecomp-iOS-IPA
-          path: SwitchRecomp_iOS.ipa
+          path: SwitchRecomp-iOS.ipa
