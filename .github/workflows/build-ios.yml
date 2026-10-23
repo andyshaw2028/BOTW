@@ -38,8 +38,8 @@ jobs:
       - name: Package Unsigned IPA Artifact
         run: |
           mkdir -p Payload
-          # 自动收集编译出的二进制文件并打包
-          find target/aarch64-apple-ios/release -maxdepth 1 -type f -executable -exec cp {} Payload/ \;
+          # 使用 macOS 兼容的 -perm -u+x 替代 -executable
+          find target/aarch64-apple-ios/release -maxdepth 1 -type f -perm -u+x -exec cp {} Payload/ \;
           
           # 封装为 IPA 格式
           zip -r SwitchRecomp-iOS.ipa Payload
