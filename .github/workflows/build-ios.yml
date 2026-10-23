@@ -1,0 +1,48 @@
+name: Build Switch Recomp for iOS
+
+on:
+  workflow_dispatch: # 允许在网页端一键手动点击触发编译
+
+jobs:
+  build-ios-ipa:
+    runs-on: macos-14 # 使用 GitHub 提供的云端 macOS 虚拟机环境
+    
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Build Dependencies
+        run: |
+          brew install cmake ninja sdl3 vulkan-headers molten-vk spirv-tools
+
+      - name: Inject System Keys
+        env:
+          PROD_KEYS: ${{ secrets.PROD_KEYS }}
+        run: |
+          mkdir -p ~/.config/switch/
+          echo "$PROD_KEYS" > ~/.config/switch/prod.keys
+
+      - name: Cross-Compile Native Binary (ARM64 iOS)
+        run: |
+          mkdir build && cd build
+          cmake .. \
+            -G Ninja \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_SYSROOT=iphoneos \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DENABLE_METAL=ON
+          ninja
+
+      - name: Package Unsigned IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/Release-iphoneos/*.app Payload/ 2>/dev/null || cp -r build/*.app Payload/
+          zip -r SwitchRecomp_iOS.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SwitchRecomp-iOS-IPA
+          path: SwitchRecomp_iOS.ipa
