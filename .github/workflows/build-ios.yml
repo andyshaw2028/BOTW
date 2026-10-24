@@ -1,98 +1,98 @@
 name: Build SwitchRecomp iOS
 
 on:
-workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
-build-ios:
-runs-on: macos-14
+  build-ios:
+    runs-on: macos-14
 
-steps:
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-- name: Checkout Repository
-uses: actions/checkout@v4
-with:
-submodules: recursive
-- name: Set up Rust Toolchain
-uses: dtolnay/rust-toolchain@stable
-with:
-targets: aarch64-apple-ios
-- name: Install Build Dependencies
-run: |
-brew install cmake ninja sdl3
-- name: Inject System Keys
-env:
-PROD_KEYS: ${{ secrets.PROD_KEYS }}
-run: |
-if [ -n "$PROD_KEYS" ]; then
-mkdir -p ~/.config/switch/
-echo "$PROD_KEYS" > ~/.config/switch/prod.keys
-fi
-- name: Build Rust Workspace for iOS
-run: |
-cargo build --release --target aarch64-apple-ios
-- name: Package Standard iOS IPA
-run: |
+      - name: Set up Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
 
-# 1. 创建标准的 Payload/SwitchRecomp.app 包结构
+      - name: Install Build Dependencies
+        run: |
+          brew install cmake ninja sdl3
 
-mkdir -p Payload/SwitchRecomp.app
+      - name: Inject System Keys
+        env:
+          PROD_KEYS: ${{ secrets.PROD_KEYS }}
+        run: |
+          if [ -n "$PROD_KEYS" ]; then
+            mkdir -p ~/.config/switch/
+            echo "$PROD_KEYS" > ~/.config/switch/prod.keys
+          fi
 
-# 2. 拷贝编译出的可执行文件并重命名为主程序
+      - name: Build Rust Workspace for iOS
+        run: |
+          cargo build --release --target aarch64-apple-ios
 
-EXECUTABLE=$(find target/aarch64-apple-ios/release -maxdepth 1 -type f -perm -u+x | head -n 1)
-if [ -z "$EXECUTABLE" ]; then
-echo "Error: No executable binary found!"
-exit 1
-fi
-cp "$EXECUTABLE" Payload/SwitchRecomp.app/SwitchRecomp
-chmod +x Payload/SwitchRecomp.app/SwitchRecomp
+      - name: Package Standard iOS IPA
+        run: |
+          # 1. 创建标准的 Payload/SwitchRecomp.app 包结构
+          mkdir -p Payload/SwitchRecomp.app
 
-# 3. 动态生成开启 “文件共享” 权限的 Info.plist 文件
+          # 2. 拷贝编译出的可执行文件并重命名为主程序
+          EXECUTABLE=$(find target/aarch64-apple-ios/release -maxdepth 1 -type f -perm -u+x | head -n 1)
+          if [ -z "$EXECUTABLE" ]; then
+            echo "Error: No executable binary found!"
+            exit 1
+          fi
+          cp "$EXECUTABLE" Payload/SwitchRecomp.app/SwitchRecomp
+          chmod +x Payload/SwitchRecomp.app/SwitchRecomp
 
-cat << 'EOF' > Payload/SwitchRecomp.app/Info.plist
+          # 3. 动态生成开启“文件共享”权限的 Info.plist 文件
+          cat << 'EOF' > Payload/SwitchRecomp.app/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>SwitchRecomp</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.recomp.botw</string>
+              <key>CFBundleName</key>
+              <string>SwitchRecomp</string>
+              <key>CFBundleDisplayName</key>
+              <string>Zelda BOTW</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0</string>
+              <key>CFBundleVersion</key>
+              <string>1</string>
+              <key>LSRequiresIPhoneOS</key>
+              <true/>
+              <key>UIFileSharingEnabled</key>
+              <true/>
+              <key>LSSupportsOpeningDocumentsInPlace</key>
+              <true/>
+              <key>UIRequiredDeviceCapabilities</key>
+              <array>
+                  <string>arm64</string>
+              </array>
+              <key>UISupportedInterfaceOrientations</key>
+              <array>
+                  <string>UIInterfaceOrientationLandscapeLeft</string>
+                  <string>UIInterfaceOrientationLandscapeRight</string>
+              </array>
+          </dict>
+          </plist>
+          EOF
 
-  
-  
-  <plist version="1.0">
-<dict>
-<key>CFBundleExecutable</key>
-<string>SwitchRecomp</string>
-<key>CFBundleIdentifier</key>
-<string>com.recomp.botw</string>
-<key>CFBundleName</key>
-<string>SwitchRecomp</string>
-<key>CFBundleDisplayName</key>
-<string>Zelda BOTW</string>
-<key>CFBundlePackageType</key>
-<string>APPL</string>
-<key>CFBundleShortVersionString</key>
-<string>1.0</string>
-<key>CFBundleVersion</key>
-<string>1</string>
-<key>LSRequiresIPhoneOS</key>
-<true/>
-<key>UIFileSharingEnabled</key>
-<true/>
-<key>LSSupportsOpeningDocumentsInPlace</key>
-<true/>
-<key>UIRequiredDeviceCapabilities</key>
-<array>
-<string>arm64</string>
-</array>
-<key>UISupportedInterfaceOrientations</key>
-<array>
-<string>UIInterfaceOrientationLandscapeLeft</string>
-<string>UIInterfaceOrientationLandscapeRight</string>
-</array>
-</dict>
-</plist>
-EOF
-# 4. 打包生成标准的 IPA 文件
+          # 4. 打包生成标准的 IPA 文件
+          zip -r SwitchRecomp-iOS.ipa Payload
 
-zip -r SwitchRecomp-iOS.ipa Payload
-- name: Upload IPA Artifact
-uses: actions/upload-artifact@v4
-with:
-name: SwitchRecomp-iOS-IPA
-path: SwitchRecomp-iOS.ipa
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SwitchRecomp-iOS-IPA
+          path: SwitchRecomp-iOS.ipa
